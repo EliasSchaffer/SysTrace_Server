@@ -15,14 +15,29 @@ type Handler struct {
 }
 
 func NewHandler() *Handler {
+
 	return &Handler{
-		devices: make(map[string]*data.Device)}
+		devices: make(map[string]*data.Device),
+	}
 }
 
 func (h *Handler) DeviceCount() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return len(h.devices)
+}
+
+func (h *Handler) DataInput() string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	var output string
+	for _, device := range h.devices {
+		output += fmt.Sprintf("Hostname: %s, CPU: %v, RAM: %v\n", device.Hostname, device.Hardware.CPU, device.Hardware.MEMORY)
+	}
+
+	return output
+
 }
 
 func (h *Handler) Dashboard(w http.ResponseWriter, _ *http.Request) {
