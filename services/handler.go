@@ -14,6 +14,7 @@ type Handler struct {
 	devices map[string]*data.Device
 }
 
+// NewHandler creates and returns a new Handler instance.
 func NewHandler() *Handler {
 
 	return &Handler{
@@ -40,6 +41,7 @@ func (h *Handler) DataInput() string {
 
 }
 
+// Dashboard renders the SysTrace Dashboard page.
 func (h *Handler) Dashboard(w http.ResponseWriter, _ *http.Request) {
 	tmpl, err := template.ParseFiles("templates/index.html")
 	if err != nil {
