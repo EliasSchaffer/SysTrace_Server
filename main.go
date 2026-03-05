@@ -5,6 +5,7 @@ import (
 	"net/http"
 )
 
+// handler writes a greeting message to the response writer.
 func handler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Hello SysTrace Dashboard")
 }
