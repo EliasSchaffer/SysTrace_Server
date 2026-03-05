@@ -1,27 +1,21 @@
 package main
 
 import (
+	"SysTrace_Server/services"
 	"fmt"
 	"net/http"
 )
 
-func handler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello SysTrace Dashboard")
-}
-
 func main() {
-	http.HandleFunc("/", handler)
+	handler := services.NewHandler()
+
+	http.HandleFunc("/", handler.Dashboard)
+	http.HandleFunc("/metrics", handler.Metrics)
+	http.HandleFunc("/status", handler.Status)
 
 	fmt.Println("Server läuft auf :8080")
 
-	http.HandleFunc("/metrics", metricsHandler)
-
-	http.ListenAndServe(":8080", nil)
-
-}
-
-func metricsHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Metrics received")
-
-	w.WriteHeader(http.StatusOK)
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		fmt.Println("Server error:", err)
+	}
 }
