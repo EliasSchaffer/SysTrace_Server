@@ -85,7 +85,7 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("RAM:", m.Hardware.MEMORY)
 
 	if database.IsConnected() {
-		// TODO Safe to database
+		go database.InsertFullDataSet("localhost", m)
 	}
 
 	w.WriteHeader(http.StatusOK)
