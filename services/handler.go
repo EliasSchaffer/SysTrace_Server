@@ -51,12 +51,12 @@ func (h *Handler) Dashboard(w http.ResponseWriter, _ *http.Request) {
 		Title       string
 		Heading     string
 		DeviceCount int
-		Data        map[string]*data.Device
+		Data        string
 	}{
 		Title:       "SysTrace Dashboard",
 		Heading:     "Welcome",
 		DeviceCount: h.DeviceCount(),
-		Data:        h.devices,
+		Data:        h.DataInput(),
 	}
 
 	if err := tmpl.Execute(w, viewData); err != nil {
