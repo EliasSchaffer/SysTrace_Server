@@ -1,4 +1,4 @@
-package data
+package static
 
 type Device struct {
 	ID       string   `json:"id"`

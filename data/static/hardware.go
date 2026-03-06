@@ -1,4 +1,4 @@
-package data
+package static
 
 type Hardware struct {
 	CPU    CPU    `json:"cpu"`

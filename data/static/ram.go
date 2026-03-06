@@ -1,4 +1,4 @@
-package data
+package static
 
 type Memory struct {
 	Total       uint64  `json:"total"`

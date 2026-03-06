@@ -1,4 +1,4 @@
-package data
+package static
 
 type GPS struct {
 	Latitude  float64 `json:"latitude"`

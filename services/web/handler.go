@@ -1,7 +1,8 @@
-package services
+package web
 
 import (
-	"SysTrace_Server/data"
+	"SysTrace_Server/data/static"
+	"SysTrace_Server/services/database"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -11,13 +12,17 @@ import (
 
 type Handler struct {
 	mu      sync.RWMutex
-	devices map[string]*data.Device
+	devices map[string]*static.Device
 }
 
 func NewHandler() *Handler {
+	err := database.InitDatabase()
+	if err != nil {
+		fmt.Println("Error initializing database:", err)
+	}
 
 	return &Handler{
-		devices: make(map[string]*data.Device),
+		devices: make(map[string]*static.Device),
 	}
 }
 
@@ -65,7 +70,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
-	var m data.Device
+	var m static.Device
 	if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
@@ -79,9 +84,51 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("CPU:", m.Hardware.CPU)
 	fmt.Println("RAM:", m.Hardware.MEMORY)
 
+	if database.IsConnected() {
+		// TODO Safe to database
+	}
+
 	w.WriteHeader(http.StatusOK)
 }
 
 func (h *Handler) Status(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) Devices(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	gpsDataArray := make([]map[string]interface{}, 0)
+
+	fmt.Printf("Total devices: %d\n", len(h.devices))
+
+	for id, device := range h.devices {
+		// Nur Devices mit gültigen GPS-Daten zurückgeben (nicht 0,0)
+		if device.GPS.Latitude == 0 && device.GPS.Longitude == 0 {
+			fmt.Printf("Device %s hat keine gültigen GPS-Daten, wird übersprungen\n", id)
+			continue
+		}
+
+		fmt.Printf("Device %s: Hostname=%s, GPS=(%.4f, %.4f)\n", id, device.Hostname, device.GPS.Latitude, device.GPS.Longitude)
+
+		gpsData := map[string]interface{}{
+			"lat":  device.GPS.Latitude,
+			"lon":  device.GPS.Longitude,
+			"name": device.Hostname,
+		}
+		gpsDataArray = append(gpsDataArray, gpsData)
+	}
+
+	fmt.Printf("Returning %d valid devices\n", len(gpsDataArray))
+
+	jsonData, err := json.Marshal(gpsDataArray)
+	if err != nil {
+		http.Error(w, "Error encoding JSON", http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(jsonData)
 }

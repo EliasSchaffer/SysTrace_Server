@@ -1,4 +1,4 @@
-package data
+package static
 
 type CPU struct {
 	Usage   float64 `json:"usage"`
