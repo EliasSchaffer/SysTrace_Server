@@ -40,6 +40,7 @@ func (h *Handler) DataInput() string {
 
 }
 
+// Dashboard renders the SysTrace dashboard page.
 func (h *Handler) Dashboard(w http.ResponseWriter, _ *http.Request) {
 	tmpl, err := template.ParseFiles("templates/index.html")
 	if err != nil {
