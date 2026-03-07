@@ -13,10 +13,15 @@ func (s *Server) Start() {
 
 	http.HandleFunc("/", handler.Dashboard)
 	http.HandleFunc("/metrics", handler.Metrics)
+	http.HandleFunc("/api/metrics", handler.Metrics)
 	http.HandleFunc("/status", handler.Status)
+	http.HandleFunc("/api/status", handler.Status)
 	http.HandleFunc("/devices", handler.Devices)
+	http.HandleFunc("/api/devices", handler.Devices)
+	http.HandleFunc("/api/health", handler.DevicesHealth)
+	http.HandleFunc("/api/device/", handler.DeviceHistory)
+	http.HandleFunc("/device/", handler.DeviceDetailsPage)
 
-	// Static Dateien (CSS, JS, etc.) servieren
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("templates"))))
 
 	fmt.Println("Server läuft auf :8080")

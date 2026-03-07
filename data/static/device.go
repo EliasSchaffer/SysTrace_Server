@@ -6,6 +6,8 @@ type Device struct {
 	Hostname string   `json:"hostname"`
 	Hardware Hardware `json:"hardware"`
 	GPS      GPS      `json:"gps"`
+	IP       string   `json:"ip"`
+	Active   bool     `json:"-"`
 }
 
 // Getter-Methoden

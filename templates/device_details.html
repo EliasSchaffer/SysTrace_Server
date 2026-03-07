@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Device Details - {{.DeviceName}}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .details-container {
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .back-button {
+            padding: 10px 20px;
+            background: #333;
+            color: white;
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+
+        .device-info {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .info-item {
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 3px;
+        }
+
+        .info-item strong {
+            display: block;
+            color: #666;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        .map-container {
+            height: 500px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .history-table {
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #f5f5f5;
+            font-weight: bold;
+        }
+
+        tr:hover {
+            background: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>Device Details: {{.DeviceName}}</h1>
+</div>
+
+<div class="details-container">
+    <a href="/" class="back-button">← Zurück zur Übersicht</a>
+
+    <div class="device-info">
+        <h2>Geräteinformationen</h2>
+        <div class="info-grid">
+            <div class="info-item">
+                <strong>Device ID</strong>
+                <span id="deviceId">{{.DeviceID}}</span>
+            </div>
+            <div class="info-item">
+                <strong>IP-Adresse</strong>
+                <span id="ip">{{.IP}}</span>
+            </div>
+            <div class="info-item">
+                <strong>Hostname</strong>
+                <span id="hostname">{{.DeviceName}}</span>
+            </div>
+            <div class="info-item">
+                <strong>Betriebssystem</strong>
+                <span id="os">{{.OS}}</span>
+            </div>
+            <div class="info-item">
+                <strong>CPU</strong>
+                <span id="cpu">{{.CPU}}</span>
+            </div>
+            <div class="info-item">
+                <strong>RAM</strong>
+                <span id="ram">{{.RAM}}</span>
+            </div>
+            <div class="info-item">
+                <strong>Aktuelle Position</strong>
+                <span id="currentPos">{{.CurrentGPS}}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="device-info">
+        <h2>GPS-Verlauf auf Karte</h2>
+        <div id="historyMap" class="map-container"></div>
+    </div>
+
+    <div class="history-table">
+        <h2>GPS-Historie</h2>
+        <table id="historyTable">
+            <thead>
+                <tr>
+                    <th>Zeitstempel</th>
+                    <th>Latitude</th>
+                    <th>Longitude</th>
+                    <th>Höhe</th>
+                    <th>Stadt</th>
+                    <th>Land</th>
+                    <th>Region</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Wird dynamisch gefüllt -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+    const deviceID = "{{.DeviceID}}";
+    const deviceName = "{{.DeviceName}}";
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadDeviceHistory();
+    });
+
+    function loadDeviceHistory() {
+        fetch(`/api/device/${deviceID}/gps-history`)
+            .then(res => res.json())
+            .then(data => {
+                console.log('GPS-Historie geladen:', data);
+
+                if (data && data.length > 0) {
+                    displayHistoryOnMap(data);
+                    fillHistoryTable(data);
+                } else {
+                    console.log('Keine GPS-Historie vorhanden');
+                }
+            })
+            .catch(error => {
+                console.error('Fehler beim Laden der GPS-Historie:', error);
+            });
+    }
+
+    function displayHistoryOnMap(history) {
+        // Karte initialisieren
+        const firstPoint = history[0];
+        const map = L.map('historyMap').setView([firstPoint.latitude, firstPoint.longitude], 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        // Koordinaten für die Linie sammeln
+        const coordinates = history.map(entry => [entry.latitude, entry.longitude]);
+
+        // Linie zeichnen (Pfad)
+        const polyline = L.polyline(coordinates, {
+            color: 'blue',
+            weight: 3,
+            opacity: 0.7
+        }).addTo(map);
+
+        // Karte an Linie anpassen
+        map.fitBounds(polyline.getBounds());
+
+        // Marker für jeden Punkt hinzufügen
+        history.forEach((entry, index) => {
+            const isFirst = index === 0;
+            const isLast = index === history.length - 1;
+
+            let color = 'blue';
+            let label = `#${index + 1}`;
+
+            if (isFirst) {
+                color = 'green';
+                label = 'Start';
+            } else if (isLast) {
+                color = 'red';
+                label = 'Aktuell';
+            }
+
+            // Marker erstellen
+            const marker = L.circleMarker([entry.latitude, entry.longitude], {
+                radius: isFirst || isLast ? 8 : 5,
+                fillColor: color,
+                color: 'white',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.8
+            }).addTo(map);
+
+            // Tooltip hinzufügen
+            marker.bindTooltip(`
+                <strong>${label}</strong><br>
+                ${new Date(entry.timestamp).toLocaleString()}<br>
+                ${entry.city}, ${entry.country}
+            `, {
+                permanent: false,
+                direction: 'top'
+            });
+
+            // Popup bei Click
+            marker.bindPopup(`
+                <div style="min-width: 200px;">
+                    <h3>${label}</h3>
+                    <p><strong>Zeit:</strong> ${new Date(entry.timestamp).toLocaleString()}</p>
+                    <p><strong>Koordinaten:</strong><br>
+                    Lat: ${entry.latitude.toFixed(6)}<br>
+                    Lon: ${entry.longitude.toFixed(6)}</p>
+                    <p><strong>Ort:</strong> ${entry.city}, ${entry.region}, ${entry.country}</p>
+                    <p><strong>Höhe:</strong> ${entry.altitude ? entry.altitude + ' m' : 'N/A'}</p>
+                </div>
+            `);
+        });
+    }
+
+    function fillHistoryTable(history) {
+        const tbody = document.querySelector('#historyTable tbody');
+        tbody.innerHTML = '';
+
+        history.forEach(entry => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${new Date(entry.timestamp).toLocaleString()}</td>
+                <td>${entry.latitude.toFixed(6)}</td>
+                <td>${entry.longitude.toFixed(6)}</td>
+                <td>${entry.altitude ? entry.altitude + ' m' : 'N/A'}</td>
+                <td>${entry.city || 'N/A'}</td>
+                <td>${entry.country || 'N/A'}</td>
+                <td>${entry.region || 'N/A'}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+</script>
+</body>
+</html>
+

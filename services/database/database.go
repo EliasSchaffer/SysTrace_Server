@@ -109,8 +109,8 @@ func InsertFullDataSet(hostname string, device static.Device) error {
 
 	if err == sql.ErrNoRows {
 		_, err = tx.Exec(
-			"INSERT INTO device (deviceID, os, hostname, createdAt) VALUES ($1, $2, $3, $4)",
-			device.ID, device.OS, device.Hostname, time.Now(),
+			"INSERT INTO device (deviceID, os, hostname, ip_address, createdAt) VALUES ($1, $2, $3, $4, $5)",
+			device.ID, device.OS, device.Hostname, device.IP, time.Now(),
 		)
 		if err != nil {
 			return fmt.Errorf("Error inserting Device: %v", err)
@@ -153,4 +153,128 @@ func InsertFullDataSet(hostname string, device static.Device) error {
 
 	return nil
 
+}
+
+func GetGPSHistory(deviceID string) ([]map[string]interface{}, error) {
+	rows, err := DB.Query(`
+		SELECT timestamp, gpsLatitude, gpsLongitude, gpsAltitude, gpsAccuracy, gpsCity, gpsCountry, gpsRegion
+		FROM dataset
+		WHERE deviceID = $1
+		ORDER BY timestamp DESC
+		LIMIT 100`, deviceID)
+	if err != nil {
+		return nil, fmt.Errorf("Error querying GPS history: %v", err)
+	}
+	defer rows.Close()
+
+	var history []map[string]interface{}
+	for rows.Next() {
+		var timestamp time.Time
+		var latitude, longitude, altitude, accuracy float64
+		var city, country, region string
+
+		if err := rows.Scan(&timestamp, &latitude, &longitude, &altitude, &accuracy, &city, &country, &region); err != nil {
+			return nil, fmt.Errorf("Error scanning GPS history row: %v", err)
+		}
+
+		history = append(history, map[string]interface{}{
+			"timestamp": timestamp,
+			"latitude":  latitude,
+			"longitude": longitude,
+			"altitude":  altitude,
+			"accuracy":  accuracy,
+			"city":      city,
+			"country":   country,
+			"region":    region,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("Error iterating GPS history rows: %v", err)
+	}
+
+	return history, nil
+}
+
+func LoadDevicesFromDatabase() (map[string]*static.Device, error) {
+	rows, err := DB.Query(`
+		SELECT d.deviceID, d.hostname, d.os, d.ip_address, d.createdAt,
+		       c.cores, c.threads, c.model,
+		       r.capacity, r.model, r.speed,
+		       COALESCE(ds.gpsLatitude, 0), COALESCE(ds.gpsLongitude, 0), 
+		       COALESCE(ds.gpsCity, ''), COALESCE(ds.gpsCountry, ''), COALESCE(ds.gpsRegion, '')
+		FROM device d
+		JOIN device_hardware dh ON d.deviceID = dh.deviceID
+		JOIN cpu c ON dh.cpuID = c.cpuID
+		JOIN ram r ON dh.ramID = r.ramID
+		LEFT JOIN dataset ds ON d.deviceID = ds.deviceID 
+		WHERE ds.timestamp IS NULL OR ds.timestamp = (
+			SELECT MAX(timestamp) FROM dataset WHERE deviceID = d.deviceID
+		)`)
+	if err != nil {
+		return nil, fmt.Errorf("Error querying devices: %v", err)
+	}
+	defer rows.Close()
+
+	devices := make(map[string]*static.Device)
+
+	for rows.Next() {
+		var deviceID, hostname, os string
+		var ip *string // NULL-safe
+		var createdAt time.Time
+		var cpuCores, cpuThreads int
+		var cpuModel string
+		var ramCapacity int64
+		var ramModel string
+		var ramSpeed int64
+		var gpsLatitude, gpsLongitude float64
+		var gpsCity, gpsCountry, gpsRegion string
+
+		if err := rows.Scan(&deviceID, &hostname, &os, &ip, &createdAt,
+			&cpuCores, &cpuThreads, &cpuModel,
+			&ramCapacity, &ramModel, &ramSpeed,
+			&gpsLatitude, &gpsLongitude, &gpsCity, &gpsCountry, &gpsRegion); err != nil {
+			return nil, fmt.Errorf("Error scanning device row: %v", err)
+		}
+
+		// Erstelle Device-Objekt
+		ipAddr := ""
+		if ip != nil {
+			ipAddr = *ip
+		}
+
+		device := &static.Device{
+			ID:       deviceID,
+			OS:       os,
+			Hostname: hostname,
+			IP:       ipAddr,
+			Hardware: static.Hardware{
+				CPU: static.CPU{
+					Cores:   cpuCores,
+					Threads: cpuThreads,
+					Model:   cpuModel,
+				},
+				MEMORY: static.Memory{
+					Total: uint64(ramCapacity),
+					Model: ramModel,
+					Speed: uint64(ramSpeed),
+				},
+			},
+			GPS: static.GPS{
+				Latitude:  gpsLatitude,
+				Longitude: gpsLongitude,
+				City:      gpsCity,
+				Country:   gpsCountry,
+				Region:    gpsRegion,
+			},
+		}
+
+		devices[deviceID] = device
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("Error iterating device rows: %v", err)
+	}
+
+	return devices, nil
 }
