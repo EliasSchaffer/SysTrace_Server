@@ -14,6 +14,9 @@ function startHealthCheck() {
     setInterval(updateHealthStatus, 10000); // Alle 10 Sekunden
 }
 
+/**
+ * Fetches and displays the health status from the API.
+ */
 function updateHealthStatus() {
     fetch("/api/health")
         .then(res => res.json())
@@ -26,6 +29,10 @@ function updateHealthStatus() {
         });
 }
 
+/**
+ * Displays the health status of devices in the healthStatus container.
+ * @param {Array} devices - An array of device objects with active status, hostname, and IP address.
+ */
 function displayHealthStatus(devices) {
     const healthContainer = document.getElementById('healthStatus');
     healthContainer.innerHTML = '';
@@ -59,6 +66,15 @@ function displayHealthStatus(devices) {
     });
 }
 
+/**
+ * Loads devices from the API and displays them on the provided map.
+ *
+ * This function fetches device data from the "/api/devices" endpoint. It checks the response for errors and processes the JSON data.
+ * Each device is validated for valid GPS coordinates before being added to the map as a marker.
+ * A tooltip is bound to each marker, and a click event is set to show device details using the showDeviceDetails function.
+ *
+ * @param {Object} map - The map object where the device markers will be added.
+ */
 function loadDevices(map) {
     fetch("/api/devices")
         .then(res => {
@@ -96,6 +112,9 @@ function loadDevices(map) {
         });
 }
 
+/**
+ * Displays device details and redirects to the device's detail page.
+ */
 function showDeviceDetails(device) {
     console.log('Device clicked:', device.name);
 

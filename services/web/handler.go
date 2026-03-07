@@ -217,6 +217,7 @@ func (h *Handler) DeviceHistory(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonData)
 }
 
+// DevicesHealth handles the HTTP request to retrieve the health status of devices.
 func (h *Handler) DevicesHealth(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
