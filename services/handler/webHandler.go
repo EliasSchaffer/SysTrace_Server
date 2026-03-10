@@ -1,18 +1,23 @@
-package web
+package handler
 
 import (
 	"SysTrace_Server/data/static"
+	"SysTrace_Server/data/ws"
 	"SysTrace_Server/services/database"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
+
+	"github.com/gorilla/websocket"
 )
 
 type Handler struct {
 	mu      sync.RWMutex
+	hub     *ws.WSHub
 	devices map[string]*static.Device
 }
 
@@ -35,6 +40,16 @@ func NewHandler() *Handler {
 			fmt.Printf("Loaded %d devices from database\n", len(devices))
 		}
 	}
+	h.hub = &ws.WSHub{
+		Clients:     make(map[*ws.WSClient]bool),
+		ClientsByID: make(map[string]*ws.WSClient),
+		Register:    make(chan *ws.WSClient),
+		Unregister:  make(chan *ws.WSClient),
+		Broadcast:   make(chan []byte),
+		DirectSend:  make(chan ws.WSDirectMessage),
+	}
+
+	go h.hub.Run()
 
 	return h
 }
@@ -82,6 +97,41 @@ func (h *Handler) Dashboard(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
+func (h *Handler) BroadcastDeviceUpdate(device static.Device) {
+	event := ws.WSEvent{
+		Type:   "update",
+		Device: device,
+	}
+
+	jsonData, err := json.Marshal(event)
+	if err != nil {
+		log.Printf("Fehler beim Marshalling des Device-Updates: %v", err)
+		return
+	}
+
+	h.hub.Broadcast <- jsonData
+}
+
+func (h *Handler) SendResponseToClient(clientID string, response ws.WSResponse) error {
+	jsonData, err := json.Marshal(response)
+	if err != nil {
+		return fmt.Errorf("response marshal fehlgeschlagen: %w", err)
+	}
+
+	result := make(chan bool, 1)
+	h.hub.DirectSend <- ws.WSDirectMessage{
+		ClientID: clientID,
+		Message:  jsonData,
+		Result:   result,
+	}
+
+	if ok := <-result; !ok {
+		return fmt.Errorf("client %q nicht verbunden", clientID)
+	}
+
+	return nil
+}
+
 func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 	var m static.Device
 	if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
@@ -98,6 +148,9 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 	m.Active = true
 	h.devices[m.ID] = &m
 	h.mu.Unlock()
+
+	// Broadcast das Device-Update an alle WebSocket-Clients
+	go h.BroadcastDeviceUpdate(m)
 
 	if database.IsConnected() {
 		go database.InsertFullDataSet("localhost", m)
@@ -119,7 +172,6 @@ func (h *Handler) Devices(w http.ResponseWriter, _ *http.Request) {
 	gpsDataArray := make([]map[string]interface{}, 0)
 
 	for _, device := range h.devices {
-		// Zeige alle Devices an, auch ohne GPS (0,0)
 		gpsData := map[string]interface{}{
 			"lat":  device.GPS.Latitude,
 			"lon":  device.GPS.Longitude,
@@ -217,6 +269,45 @@ func (h *Handler) DeviceHistory(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonData)
 }
 
+func (h *Handler) SendToClient(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ClientID string `json:"clientId"`
+		Type     string `json:"type"`
+		Message  string `json:"message,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.ClientID == "" || req.Type == "" {
+		http.Error(w, "clientId and type are required", http.StatusBadRequest)
+		return
+	}
+
+	response := ws.WSResponse{
+		Type:    req.Type,
+		Message: req.Message,
+	}
+
+	if err := h.SendResponseToClient(req.ClientID, response); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":       true,
+		"clientId": req.ClientID,
+		"type":     req.Type,
+	})
+}
+
 func (h *Handler) DevicesHealth(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -225,13 +316,10 @@ func (h *Handler) DevicesHealth(w http.ResponseWriter, _ *http.Request) {
 
 	healthData := make([]map[string]interface{}, 0)
 
-	// Markiere Devices als offline, wenn sie länger als 30 Sekunden keine Daten gesendet haben
 	for _, device := range h.devices {
 		status := "offline"
 		active := device.Active
 
-		// Falls Active ist, aber länger als 30 Sekunden keine neuen Metrics kommen, setze offline
-		// (Hier könnte man einen Timestamp speichern und vergleichen)
 		if device.Active {
 			status = "online"
 		}
@@ -254,4 +342,39 @@ func (h *Handler) DevicesHealth(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	w.Write(jsonData)
+}
+
+func (h *Handler) WebSocketHandler(writer http.ResponseWriter, request *http.Request) {
+	var upgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return true // spaeter strenger machen
+		},
+	}
+	conn, err := upgrader.Upgrade(writer, request, nil)
+	if err != nil {
+		fmt.Printf("WebSocket Upgrade error: %v\n", err)
+		return
+	}
+
+	clientID := request.URL.Query().Get("clientId")
+	if clientID == "" {
+		clientID = request.RemoteAddr
+	}
+
+	client := &ws.WSClient{
+		WSHub:    h.hub,
+		ClientID: clientID,
+		Conn:     conn,
+		Send:     make(chan []byte, 256),
+		OnClientMessage: func(_ string, message []byte) {
+			HandleEvent(string(message))
+		},
+	}
+
+	client.WSHub.Register <- client
+
+	go client.WritePump()
+	go client.ReadPump()
 }

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
     <title>Device Details - {{.DeviceName}}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
@@ -60,6 +60,46 @@
             background: white;
             padding: 20px;
             border-radius: 5px;
+        }
+
+        .command-panel {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+
+        .command-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .command-row input {
+            padding: 10px;
+            min-width: 240px;
+        }
+
+        .command-row textarea {
+            padding: 10px;
+            min-width: 320px;
+            min-height: 80px;
+            font-family: monospace;
+        }
+
+        .command-row button {
+            padding: 10px 14px;
+            background: #2d6cdf;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .command-status {
+            margin-top: 10px;
+            font-size: 14px;
         }
 
         table {
@@ -130,6 +170,17 @@
         <div id="historyMap" class="map-container"></div>
     </div>
 
+    <div class="command-panel">
+        <h2>Test-Response an diesen Client senden</h2>
+        <div class="command-row">
+            <button onclick="sendTestResponseToDeviceClient()">Test senden</button>
+            <button onclick="sendShutdownCommandToDeviceClient()">Shutdown senden</button>
+            <button onclick="sendRestartCommandToDeviceClient()">Restart senden</button>
+            <button onclick="sendHibernationCommandToDeviceClient()">Hibernation senden</button>
+        </div>
+        <div id="commandStatus" class="command-status"></div>
+    </div>
+
     <div class="history-table">
         <h2>GPS-Historie</h2>
         <table id="historyTable">
@@ -154,9 +205,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
     const deviceID = "{{.DeviceID}}";
-    const deviceName = "{{.DeviceName}}";
 
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         loadDeviceHistory();
     });
 
@@ -226,7 +276,6 @@
                 fillOpacity: 0.8
             }).addTo(map);
 
-            // Tooltip hinzufügen
             marker.bindTooltip(`
                 <strong>${label}</strong><br>
                 ${new Date(entry.timestamp).toLocaleString()}<br>
@@ -236,7 +285,6 @@
                 direction: 'top'
             });
 
-            // Popup bei Click
             marker.bindPopup(`
                 <div style="min-width: 200px;">
                     <h3>${label}</h3>
@@ -268,6 +316,52 @@
             `;
             tbody.appendChild(row);
         });
+    }
+
+    function sendResponseToDeviceClient(type, message, successLabel) {
+        const statusEl = document.getElementById('commandStatus');
+
+        const body = {
+            clientId: deviceID,
+            type,
+            message
+        };
+
+        fetch('/api/ws/send', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        })
+            .then(async (res) => {
+                const text = await res.text();
+                if (!res.ok) {
+                    throw new Error(text || 'Senden fehlgeschlagen');
+                }
+                return text;
+            })
+            .then(() => {
+                statusEl.textContent = `${successLabel} an ${deviceID}`;
+                statusEl.style.color = '#1b7f2a';
+            })
+            .catch((err) => {
+                statusEl.textContent = `Fehler: ${err.message}`;
+                statusEl.style.color = '#b00020';
+            });
+    }
+
+    function sendTestResponseToDeviceClient() {
+        sendResponseToDeviceClient('test', 'Test', 'Gesendet: test/Test');
+    }
+
+    function sendShutdownCommandToDeviceClient() {
+        sendResponseToDeviceClient('command', 'shutdown', 'Gesendet: command/shutdown');
+    }
+
+    function sendRestartCommandToDeviceClient() {
+        sendResponseToDeviceClient('command', 'restart', 'Gesendet: command/restart');
+    }
+    function sendHibernationCommandToDeviceClient() {
+        sendResponseToDeviceClient('command', 'sleep', 'Gesendet: command/hibernate');
     }
 </script>
 </body>

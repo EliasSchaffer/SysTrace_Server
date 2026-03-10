@@ -11,7 +11,7 @@ function initializeMap() {
 
 function startHealthCheck() {
     updateHealthStatus();
-    setInterval(updateHealthStatus, 10000); // Alle 10 Sekunden
+    setInterval(updateHealthStatus, 10000);
 }
 
 function updateHealthStatus() {
@@ -70,14 +70,12 @@ function loadDevices(map) {
         .then(data => {
             console.log('Geladene Geräte:', data);
             data.forEach(device => {
-                // Nur Devices mit gültigen GPS-Koordinaten anzeigen (nicht 0,0)
                 if (device.lat === 0 && device.lon === 0) {
                     console.log(`Device ${device.name} hat keine gültigen GPS-Daten`);
                     return;
                 }
 
                 let marker = L.marker([device.lat, device.lon]);
-                // Tooltip beim Hover
                 marker.bindTooltip(`${device.name}<br>${device.ip}`, {
                     permanent: false,
                     direction: 'top',
@@ -99,11 +97,9 @@ function loadDevices(map) {
 function showDeviceDetails(device) {
     console.log('Device clicked:', device.name);
 
-    // Weiterleitung zur Detail-Seite
     window.location.href = `/device/${encodeURIComponent(device.name)}`;
 }
 
-// Initialisiere die App beim Laden der Seite
 document.addEventListener('DOMContentLoaded', function() {
     initializeMap();
     startHealthCheck();
