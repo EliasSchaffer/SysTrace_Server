@@ -27,7 +27,7 @@ func HandleEvent(eventString string) {
 	case "device_disconnected":
 		// TODO: Handle device disconnected event
 	default:
-		// Handle unknown event types if necessary
+		fmt.Printf("Unkown event type: %s\n", event.Type)
 	}
 }
 

@@ -278,6 +278,7 @@ func (h *Handler) SendToClient(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ClientID string `json:"clientId"`
 		Type     string `json:"type"`
+		Payload  string `json:"result,omitempty"`
 		Message  string `json:"message,omitempty"`
 	}
 
@@ -292,6 +293,7 @@ func (h *Handler) SendToClient(w http.ResponseWriter, r *http.Request) {
 
 	response := ws.WSResponse{
 		Type:    req.Type,
+		Payload: req.Payload,
 		Message: req.Message,
 	}
 

@@ -177,6 +177,8 @@
             <button onclick="sendShutdownCommandToDeviceClient()">Shutdown senden</button>
             <button onclick="sendRestartCommandToDeviceClient()">Restart senden</button>
             <button onclick="sendHibernationCommandToDeviceClient()">Hibernation senden</button>
+            <button onclick="sendChangeServerCommandToDeviceClient()">Change Server Test senden</button>
+
         </div>
         <div id="commandStatus" class="command-status"></div>
     </div>
@@ -237,17 +239,14 @@
             attribution: '© OpenStreetMap'
         }).addTo(map);
 
-        // Koordinaten für die Linie sammeln
         const coordinates = history.map(entry => [entry.latitude, entry.longitude]);
 
-        // Linie zeichnen (Pfad)
         const polyline = L.polyline(coordinates, {
             color: 'blue',
             weight: 3,
             opacity: 0.7
         }).addTo(map);
 
-        // Karte an Linie anpassen
         map.fitBounds(polyline.getBounds());
 
         // Marker für jeden Punkt hinzufügen
@@ -318,12 +317,13 @@
         });
     }
 
-    function sendResponseToDeviceClient(type, message, successLabel) {
+    function sendResponseToDeviceClient(type,payload ,message, successLabel) {
         const statusEl = document.getElementById('commandStatus');
 
         const body = {
             clientId: deviceID,
             type,
+            payload,
             message
         };
 
@@ -350,18 +350,21 @@
     }
 
     function sendTestResponseToDeviceClient() {
-        sendResponseToDeviceClient('test', 'Test', 'Gesendet: test/Test');
+        sendResponseToDeviceClient('test','', 'Test', 'Gesendet: test/Test');
     }
 
     function sendShutdownCommandToDeviceClient() {
-        sendResponseToDeviceClient('command', 'shutdown', 'Gesendet: command/shutdown');
+        sendResponseToDeviceClient('command','', 'shutdown', 'Gesendet: command/shutdown');
     }
 
     function sendRestartCommandToDeviceClient() {
-        sendResponseToDeviceClient('command', 'restart', 'Gesendet: command/restart');
+        sendResponseToDeviceClient('command','', 'restart', 'Gesendet: command/restart');
     }
     function sendHibernationCommandToDeviceClient() {
-        sendResponseToDeviceClient('command', 'sleep', 'Gesendet: command/hibernate');
+        sendResponseToDeviceClient('command','', 'sleep', 'Gesendet: command/hibernate');
+    }
+    function sendChangeServerCommandToDeviceClient() {
+        sendResponseToDeviceClient('config', 'setMasterServer',`http://localhost:8080`, `Gesendet: config/change_server: http://localhost:8080`);
     }
 </script>
 </body>
