@@ -1,7 +1,8 @@
 package ws
 
 type WSResponse struct {
-	Type    string `json:"type"`
-	Message string `json:"message,omitempty"`
-	Payload string `json:"result,omitempty"`
+	Type      string `json:"type"`
+	RequestID string `json:"request_id"`
+	Status    int    `json:"status"`
+	Message   string `json:"message,omitempty"`
 }

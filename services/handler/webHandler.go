@@ -4,10 +4,12 @@ import (
 	"SysTrace_Server/data/static"
 	"SysTrace_Server/data/ws"
 	"SysTrace_Server/services/database"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
+	"math/big"
 	"net/http"
 	"strings"
 	"sync"
@@ -16,10 +18,13 @@ import (
 )
 
 type Handler struct {
-	mu      sync.RWMutex
-	hub     *ws.WSHub
-	devices map[string]*static.Device
+	mu       sync.RWMutex
+	hub      *ws.WSHub
+	devices  map[string]*static.Device
+	requests map[string]chan ws.WSResponse
 }
+
+const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 func NewHandler() *Handler {
 	err := database.InitDatabase()
@@ -28,7 +33,8 @@ func NewHandler() *Handler {
 	}
 
 	h := &Handler{
-		devices: make(map[string]*static.Device),
+		devices:  make(map[string]*static.Device),
+		requests: make(map[string]chan ws.WSResponse),
 	}
 
 	if database.IsConnected() {
@@ -52,6 +58,20 @@ func NewHandler() *Handler {
 	go h.hub.Run()
 
 	return h
+}
+
+func generateRequestID() (string, error) {
+	bytes := make([]byte, 10)
+
+	for i := range bytes {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+		if err != nil {
+			return "", err
+		}
+		bytes[i] = letters[num.Int64()]
+	}
+
+	return string(bytes), nil
 }
 
 func (h *Handler) DeviceCount() int {
@@ -112,8 +132,8 @@ func (h *Handler) BroadcastDeviceUpdate(device static.Device) {
 	h.hub.Broadcast <- jsonData
 }
 
-func (h *Handler) SendResponseToClient(clientID string, response ws.WSResponse) error {
-	jsonData, err := json.Marshal(response)
+func (h *Handler) SendRequestToClient(clientID string, request ws.WSRequest) error {
+	jsonData, err := json.Marshal(request)
 	if err != nil {
 		return fmt.Errorf("response marshal fehlgeschlagen: %w", err)
 	}
@@ -130,6 +150,52 @@ func (h *Handler) SendResponseToClient(clientID string, response ws.WSResponse) 
 	}
 
 	return nil
+}
+
+func (h *Handler) handleResponseEvent(response ws.WSResponse) {
+	requestID := response.RequestID
+	if requestID == "" {
+		fmt.Printf("Response ohne request_id empfangen\n")
+		return
+	}
+
+	switch response.Status {
+	case 200:
+		fmt.Printf("Request %s erfolgreich: %s\n", requestID, response.Message)
+	case 400:
+		fmt.Printf("Bad Request fuer Request ID %s: %s\n", requestID, response.Message)
+	case 500:
+		fmt.Printf("Server Error fuer Request ID %s: %s\n", requestID, response.Message)
+	case 503:
+		fmt.Printf("Service Unavailable fuer Request ID %s: %s\n", requestID, response.Message)
+	default:
+		fmt.Printf("Unbekannter Status %d fuer Request ID %s: %s\n", response.Status, requestID, response.Message)
+	}
+
+	h.mu.Lock()
+	responseChan, exists := h.requests[requestID]
+	if exists {
+		delete(h.requests, requestID)
+	}
+	h.mu.Unlock()
+
+	if !exists {
+		fmt.Printf("Keine offene Anfrage fuer Request ID %s gefunden\n", requestID)
+		return
+	}
+
+	select {
+	case responseChan <- response:
+	default:
+		fmt.Printf("Response-Channel fuer Request ID %s ist voll\n", requestID)
+	}
+}
+
+func (h *Handler) getRequestByID(requestID string) (chan ws.WSResponse, bool) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	responseChan, exists := h.requests[requestID]
+	return responseChan, exists
 }
 
 func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
@@ -291,13 +357,27 @@ func (h *Handler) SendToClient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := ws.WSResponse{
-		Type:    req.Type,
-		Payload: req.Payload,
-		Message: req.Message,
+	requestID, err := generateRequestID()
+	if err != nil {
+		http.Error(w, "Error generating request ID", http.StatusInternalServerError)
+		return
+
+	}
+	response := ws.WSRequest{
+		RequestID: requestID,
+		Type:      req.Type,
+		Payload:   req.Payload,
+		Message:   req.Message,
 	}
 
-	if err := h.SendResponseToClient(req.ClientID, response); err != nil {
+	h.mu.Lock()
+	h.requests[requestID] = make(chan ws.WSResponse, 1)
+	h.mu.Unlock()
+
+	if err := h.SendRequestToClient(req.ClientID, response); err != nil {
+		h.mu.Lock()
+		delete(h.requests, requestID)
+		h.mu.Unlock()
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
@@ -351,7 +431,7 @@ func (h *Handler) WebSocketHandler(writer http.ResponseWriter, request *http.Req
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 		CheckOrigin: func(r *http.Request) bool {
-			return true // spaeter strenger machen
+			return true
 		},
 	}
 	conn, err := upgrader.Upgrade(writer, request, nil)
@@ -371,6 +451,24 @@ func (h *Handler) WebSocketHandler(writer http.ResponseWriter, request *http.Req
 		Conn:     conn,
 		Send:     make(chan []byte, 256),
 		OnClientMessage: func(_ string, message []byte) {
+			var header struct {
+				Type string `json:"type"`
+			}
+			if err := json.Unmarshal(message, &header); err != nil {
+				fmt.Printf("Fehler beim Parsen des Event-Typs: %v\n", err)
+				return
+			}
+
+			if header.Type == "response" {
+				var response ws.WSResponse
+				if err := json.Unmarshal(message, &response); err != nil {
+					fmt.Printf("Fehler beim Parsen des Response-Events: %v\n", err)
+					return
+				}
+				h.handleResponseEvent(response)
+				return
+			}
+
 			HandleEvent(string(message))
 		},
 	}
