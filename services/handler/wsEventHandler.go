@@ -10,7 +10,7 @@ import (
 type WSEventHandler struct {
 }
 
-func HandleEvent(eventString string) {
+func (h *Handler) HandleEvent(eventString string) {
 	raw := []byte(eventString)
 
 	var header struct {
@@ -34,7 +34,7 @@ func HandleEvent(eventString string) {
 			fmt.Printf("Fehler beim Parsen des Update-Events: %v", err)
 			return
 		}
-		handleUpdateEvent(update.Device)
+		h.handleUpdateEvent(update.Device)
 	case "response":
 		return
 	case "device_connected":
@@ -46,12 +46,14 @@ func HandleEvent(eventString string) {
 	}
 }
 
-func handleUpdateEvent(device static.Device) {
-	var m static.Device
-	m = device
-	m.Active = true
+func (h *Handler) handleUpdateEvent(device static.Device) {
+	device.Active = true
+
+	h.mu.Lock()
+	h.devices[device.ID] = &device
+	h.mu.Unlock()
 
 	if database.IsConnected() {
-		go database.InsertFullDataSet("localhost", m)
+		go database.InsertFullDataSet("localhost", device)
 	}
 }

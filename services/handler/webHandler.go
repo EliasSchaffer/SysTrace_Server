@@ -469,7 +469,7 @@ func (h *Handler) WebSocketHandler(writer http.ResponseWriter, request *http.Req
 				return
 			}
 
-			HandleEvent(string(message))
+			h.HandleEvent(string(message))
 		},
 	}
 

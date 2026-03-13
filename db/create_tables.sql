@@ -1,55 +1,70 @@
--- CPU Tabelle
+
+DROP TABLE IF EXISTS dataset CASCADE;
+DROP TABLE IF EXISTS device_hardware CASCADE;
+DROP TABLE IF EXISTS device CASCADE;
+DROP TABLE IF EXISTS cpu CASCADE;
+DROP TABLE IF EXISTS ram CASCADE;
+
 CREATE TABLE IF NOT EXISTS cpu (
-    cpuID SERIAL PRIMARY KEY,
-    cores INT NOT NULL,
-    threads INT NOT NULL,
-    model VARCHAR(255) NOT NULL,
-    usage DECIMAL(5, 2),
-    temp DECIMAL(5, 2)
-);
-
--- RAM Tabelle
-CREATE TABLE IF NOT EXISTS ram (
-    ramID SERIAL PRIMARY KEY,
-    total BIGINT NOT NULL,
-    used BIGINT NOT NULL,
-    available BIGINT NOT NULL,
-    usedPercent DECIMAL(5, 2),
-    model VARCHAR(255),
+                                   cpuID SERIAL PRIMARY KEY,
+                                   cores INT NOT NULL,
+                                   threads INT NOT NULL,
+                                   model VARCHAR(255) NOT NULL,
     speed BIGINT
-);
+    );
 
--- GPS Tabelle
-CREATE TABLE IF NOT EXISTS gps (
-    gpsID SERIAL PRIMARY KEY,
-    latitude DECIMAL(10, 8),
-    longitude DECIMAL(11, 8),
-    altitude DECIMAL(10, 2),
-    accuracy DECIMAL(10, 2),
-    city VARCHAR(255),
-    country VARCHAR(255),
-    region VARCHAR(255)
-);
+CREATE TABLE IF NOT EXISTS ram (
+                                   ramID SERIAL PRIMARY KEY,
+                                   capacity BIGINT NOT NULL,
+                                   model VARCHAR(255),
+    speed BIGINT
+    );
 
--- Device Tabelle
 CREATE TABLE IF NOT EXISTS device (
-    deviceID VARCHAR(255) PRIMARY KEY,
-    ramID INT NOT NULL,
-    cpuID INT NOT NULL,
-    gpsID INT NOT NULL,
+                                      deviceID VARCHAR(255) PRIMARY KEY,
     os VARCHAR(255),
     hostname VARCHAR(255),
-    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (ramID) REFERENCES ram(ramID),
-    FOREIGN KEY (cpuID) REFERENCES cpu(cpuID),
-    FOREIGN KEY (gpsID) REFERENCES gps(gpsID)
-);
+    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
 
--- Dataset Tabelle
+CREATE TABLE IF NOT EXISTS device_hardware (
+                                               deviceID VARCHAR(255) PRIMARY KEY,
+    cpuID INT NOT NULL,
+    ramID INT NOT NULL,
+    FOREIGN KEY (deviceID) REFERENCES device(deviceID) ON DELETE CASCADE,
+    FOREIGN KEY (cpuID) REFERENCES cpu(cpuID),
+    FOREIGN KEY (ramID) REFERENCES ram(ramID)
+    );
+
 CREATE TABLE IF NOT EXISTS dataset (
-    datasetID SERIAL PRIMARY KEY,
-    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deviceID VARCHAR(255) NOT NULL,
-    FOREIGN KEY (deviceID) REFERENCES device(deviceID)
-);
+                                       datasetID SERIAL PRIMARY KEY,
+                                       timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                       deviceID VARCHAR(255) NOT NULL,
+
+    -- CPU Messwerte
+    cpuUsage DECIMAL(5, 2),
+    cpuTemp DECIMAL(5, 2),
+
+    -- RAM Messwerte
+    ramUsed BIGINT,
+    ramAvailable BIGINT,
+    ramUsedPercent DECIMAL(5, 2),
+
+    -- GPS Daten (ändern sich bei jedem Update)
+    gpsLatitude DECIMAL(10, 8),
+    gpsLongitude DECIMAL(11, 8),
+    gpsAltitude DECIMAL(10, 2),
+    gpsAccuracy DECIMAL(10, 2),
+    gpsCity VARCHAR(255),
+    gpsCountry VARCHAR(255),
+    gpsRegion VARCHAR(255),
+
+    FOREIGN KEY (deviceID) REFERENCES device(deviceID) ON DELETE CASCADE
+    );
+
+-- Indizes für Performance
+CREATE INDEX idx_dataset_deviceID ON dataset(deviceID);
+CREATE INDEX idx_dataset_timestamp ON dataset(timestamp);
+CREATE INDEX idx_device_hardware_cpu ON device_hardware(cpuID);
+CREATE INDEX idx_device_hardware_ram ON device_hardware(ramID);
 
