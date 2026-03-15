@@ -2,6 +2,10 @@
 
 A simple Go backend for system/device telemetry with WebSocket updates and PostgreSQL support.
 
+## Demo
+
+- [Demo-Video](https://youtu.be/qxP3Q3q_ucY)
+
 ## Requirements
 
 - Go 1.26+
