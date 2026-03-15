@@ -2,6 +2,8 @@
 
 A simple Go backend for system/device telemetry with WebSocket updates and PostgreSQL support.
 
+**ℹ️ Note:** This is the **Server component** of SysTrace. You also need the **SysTrace Agent** to collect telemetry data from devices. See [Related Repositories](#related-repositories) below.
+
 ## Demo
 
 - [Demo-Video](https://youtu.be/qxP3Q3q_ucY)

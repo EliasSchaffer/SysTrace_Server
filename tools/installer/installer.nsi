@@ -76,7 +76,7 @@ Function ConfigPageShow
 
     ${NSD_CreateLabel} 0 120u 100% 12u "Datenbank Passwort:"
     Pop $Label_DBPassword
-    ${NSD_CreatePassword} 0 133u 100% 12u ""
+    ${NSD_CreatePassword} 0 133u 100% 12u "systrace_secure_password"
     Pop $Input_DBPassword
 
     ${NSD_CreateLabel} 0 150u 100% 12u "Datenbank Name:"
@@ -94,6 +94,10 @@ Function ConfigPageLeave
     ${NSD_GetText} $Input_DBUser $DB_User
     ${NSD_GetText} $Input_DBPassword $DB_Password
     ${NSD_GetText} $Input_DBName $DB_Name
+
+    ${If} $DB_Password == ""
+        StrCpy $DB_Password "systrace_secure_password"
+    ${EndIf}
 FunctionEnd
 
 ; ============================================
@@ -145,8 +149,24 @@ Section "Hauptprogramm" SecMain
         MessageBox MB_OK|MB_ICONEXCLAMATION "Docker ist nicht installiert!$\nBitte Docker Desktop installieren:$\nhttps://www.docker.com/products/docker-desktop"
     ${Else}
         DetailPrint "Docker gefunden — Datenbank wird gestartet..."
-        ExecWait 'docker-compose -f "$INSTDIR\db\docker-compose.yml" up -d'
-        DetailPrint "Datenbank erfolgreich gestartet!"
+
+        ExecWait 'docker compose version' $1
+        ${If} $1 == 0
+            ExecWait 'docker compose -f "$INSTDIR\db\docker-compose.yml" up -d' $2
+        ${Else}
+            ExecWait 'docker-compose --version' $1
+            ${If} $1 == 0
+                ExecWait 'docker-compose -f "$INSTDIR\db\docker-compose.yml" up -d' $2
+            ${Else}
+                StrCpy $2 1
+            ${EndIf}
+        ${EndIf}
+
+        ${If} $2 != 0
+            MessageBox MB_OK|MB_ICONEXCLAMATION "Datenbank konnte nicht automatisch gestartet werden.$\nBitte Docker Desktop starten und den Compose-Befehl manuell ausführen."
+        ${Else}
+            DetailPrint "Datenbank erfolgreich gestartet!"
+        ${EndIf}
     ${EndIf}
 
     WriteUninstaller "$INSTDIR\Uninstall.exe"
@@ -168,7 +188,15 @@ SectionEnd
 ; ============================================
 Section "Uninstall"
 
-    ExecWait 'docker-compose -f "$INSTDIR\db\docker-compose.yml" down'
+    ExecWait 'docker compose version' $0
+    ${If} $0 == 0
+        ExecWait 'docker compose -f "$INSTDIR\db\docker-compose.yml" down'
+    ${Else}
+        ExecWait 'docker-compose --version' $0
+        ${If} $0 == 0
+            ExecWait 'docker-compose -f "$INSTDIR\db\docker-compose.yml" down'
+        ${EndIf}
+    ${EndIf}
 
     Delete "$INSTDIR\SysTrace_Server.exe"
     Delete "$INSTDIR\.env"

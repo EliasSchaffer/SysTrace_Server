@@ -5,33 +5,38 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
+	"strconv"
 	"time"
 
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
 var DB *sql.DB
 
-const (
-	host     = "localhost"
-	port     = 5432
-	user     = "systrace"
-	password = "systrace_secure_password"
-	dbname   = "systrace_db"
-)
-
 func InitDatabase() error {
+	_ = godotenv.Load()
+
+	cfg := dbConfig{
+		host:     getEnv("DB_HOST", "localhost"),
+		port:     getEnvInt("DB_PORT", 5432),
+		user:     getEnv("DB_USER", "systrace"),
+		password: getEnv("DB_PASSWORD", "systrace_secure_password"),
+		dbname:   getEnv("DB_NAME", "systrace_db"),
+	}
+
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		host, port, user, password, dbname)
+		cfg.host, cfg.port, cfg.user, cfg.password, cfg.dbname)
 
 	var err error
 	DB, err = sql.Open("postgres", psqlInfo)
 	if err != nil {
-		return fmt.Errorf("Error openng connection to database: %v", err)
+		return fmt.Errorf("error opening connection to database: %v", err)
 	}
 
 	if err := DB.Ping(); err != nil {
-		return fmt.Errorf("Coudnt connect to Database: %v", err)
+		return fmt.Errorf("could not connect to database: %v", err)
 	}
 
 	DB.SetMaxOpenConns(25)
@@ -277,4 +282,28 @@ func LoadDevicesFromDatabase() (map[string]*static.Device, error) {
 	}
 
 	return devices, nil
+}
+
+type dbConfig struct {
+	host     string
+	port     int
+	user     string
+	password string
+	dbname   string
+}
+
+func getEnv(key, defaultVal string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultVal
+}
+
+func getEnvInt(key string, defaultVal int) int {
+	if value := os.Getenv(key); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	return defaultVal
 }
