@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS device (
                                       deviceID VARCHAR(255) PRIMARY KEY,
     os VARCHAR(255),
     hostname VARCHAR(255),
+    ip_address VARCHAR(255),
     createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 

@@ -19,6 +19,7 @@ Var DB_User
 Var DB_Password
 Var DB_Name
 Var ServerPort
+Var ContainerExists
 
 Var Dialog
 Var Label_DBHost
@@ -127,6 +128,7 @@ Section "Hauptprogramm" SecMain
     FileWrite $0 "    volumes:$\r$\n"
     FileWrite $0 "      - postgres_data:/var/lib/postgresql/data$\r$\n"
     FileWrite $0 "      - ./init:/docker-entrypoint-initdb.d$\r$\n"
+    FileWrite $0 "    restart: unless-stopped$\r$\n"
     FileWrite $0 "volumes:$\r$\n"
     FileWrite $0 "  postgres_data:$\r$\n"
     FileClose $0
@@ -149,16 +151,38 @@ Section "Hauptprogramm" SecMain
         MessageBox MB_OK|MB_ICONEXCLAMATION "Docker ist nicht installiert!$\nBitte Docker Desktop installieren:$\nhttps://www.docker.com/products/docker-desktop"
     ${Else}
         DetailPrint "Docker gefunden — Datenbank wird gestartet..."
-
-        ExecWait 'docker compose version' $1
-        ${If} $1 == 0
-            ExecWait 'docker compose -f "$INSTDIR\db\docker-compose.yml" up -d' $2
-        ${Else}
-            ExecWait 'docker-compose --version' $1
+        DetailPrint "Docker gefunden — Datenbank wird vorbereitet..."
+        ; Prüfe ob Container bereits existiert
+        ExecWait 'docker inspect systrace_postgres' $ContainerExists
+        ${If} $ContainerExists != 0
+            ; Container existiert nicht → Volume leeren damit Init-Script läuft
+            DetailPrint "Neuer Container — Volume wird initialisiert..."
+            ExecWait 'docker compose version' $1
             ${If} $1 == 0
-                ExecWait 'docker-compose -f "$INSTDIR\db\docker-compose.yml" up -d' $2
+                ExecWait 'docker compose -f "$INSTDIR\db\docker-compose.yml" down -v'
+                ExecWait 'docker compose -f "$INSTDIR\db\docker-compose.yml" up -d' $2
             ${Else}
-                StrCpy $2 1
+                ExecWait 'docker-compose --version' $1
+                ${If} $1 == 0
+                    ExecWait 'docker-compose -f "$INSTDIR\db\docker-compose.yml" down -v'
+                    ExecWait 'docker-compose -f "$INSTDIR\db\docker-compose.yml" up -d' $2
+                ${Else}
+                    StrCpy $2 1
+                ${EndIf}
+            ${EndIf}
+        ${Else}
+            ; Container existiert bereits → einfach starten
+            DetailPrint "Bestehender Container wird gestartet..."
+            ExecWait 'docker compose version' $1
+            ${If} $1 == 0
+                ExecWait 'docker compose -f "$INSTDIR\db\docker-compose.yml" up -d' $2
+            ${Else}
+                ExecWait 'docker-compose --version' $1
+                ${If} $1 == 0
+                    ExecWait 'docker-compose -f "$INSTDIR\db\docker-compose.yml" up -d' $2
+                ${Else}
+                    StrCpy $2 1
+                ${EndIf}
             ${EndIf}
         ${EndIf}
 
