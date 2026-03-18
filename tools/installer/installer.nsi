@@ -20,6 +20,7 @@ Var DB_Password
 Var DB_Name
 Var ServerPort
 Var ContainerExists
+Var DockerExe
 
 Var Dialog
 Var Label_DBHost
@@ -44,7 +45,7 @@ Page custom ConfigPageShow ConfigPageLeave
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 
-!insertmacro MUI_LANGUAGE "German"
+!insertmacro MUI_LANGUAGE "English"
 
 ; ============================================
 Function ConfigPageShow
@@ -60,27 +61,27 @@ Function ConfigPageShow
     ${NSD_CreateText} 0 13u 100% 12u "8080"
     Pop $Input_ServerPort
 
-    ${NSD_CreateLabel} 0 30u 100% 12u "Datenbank Host:"
+    ${NSD_CreateLabel} 0 30u 100% 12u "Database Host:"
     Pop $Label_DBHost
     ${NSD_CreateText} 0 43u 100% 12u "localhost"
     Pop $Input_DBHost
 
-    ${NSD_CreateLabel} 0 60u 100% 12u "Datenbank Port:"
+    ${NSD_CreateLabel} 0 60u 100% 12u "Database Port:"
     Pop $Label_DBPort
     ${NSD_CreateText} 0 73u 100% 12u "5432"
     Pop $Input_DBPort
 
-    ${NSD_CreateLabel} 0 90u 100% 12u "Datenbank Benutzer:"
+    ${NSD_CreateLabel} 0 90u 100% 12u "Database User:"
     Pop $Label_DBUser
     ${NSD_CreateText} 0 103u 100% 12u "systrace"
     Pop $Input_DBUser
 
-    ${NSD_CreateLabel} 0 120u 100% 12u "Datenbank Passwort:"
+    ${NSD_CreateLabel} 0 120u 100% 12u "Database Password:"
     Pop $Label_DBPassword
     ${NSD_CreatePassword} 0 133u 100% 12u "systrace_secure_password"
     Pop $Input_DBPassword
 
-    ${NSD_CreateLabel} 0 150u 100% 12u "Datenbank Name:"
+    ${NSD_CreateLabel} 0 150u 100% 12u "Database Name:"
     Pop $Label_DBName
     ${NSD_CreateText} 0 163u 100% 12u "systrace_db"
     Pop $Input_DBName
@@ -102,7 +103,32 @@ Function ConfigPageLeave
 FunctionEnd
 
 ; ============================================
-Section "Hauptprogramm" SecMain
+Section "Main Program" SecMain
+
+    ; Hard pre-check: stop installation immediately if Docker is missing or not running.
+    StrCpy $DockerExe "docker"
+    nsExec::ExecToLog '$DockerExe --version'
+    Pop $0
+
+    ; Fallback for systems where PATH is not available in installer context.
+    ${If} $0 != 0
+        IfFileExists "$PROGRAMFILES\Docker\Docker\resources\bin\docker.exe" 0 +3
+            StrCpy $DockerExe '"$PROGRAMFILES\Docker\Docker\resources\bin\docker.exe"'
+            nsExec::ExecToLog '$DockerExe --version'
+            Pop $0
+    ${EndIf}
+
+    ${If} $0 != 0
+        MessageBox MB_OK|MB_ICONEXCLAMATION "Docker is not installed or not running.$\nPlease install/start Docker Desktop and run the installer again.$\nhttps://www.docker.com/products/docker-desktop"
+        Abort
+    ${EndIf}
+
+    nsExec::ExecToLog '$DockerExe info'
+    Pop $1
+    ${If} $1 != 0
+        MessageBox MB_OK|MB_ICONEXCLAMATION "Docker is not installed or not running.$\nPlease install/start Docker Desktop and run the installer again.$\nhttps://www.docker.com/products/docker-desktop"
+        Abort
+    ${EndIf}
 
     SetOutPath "$INSTDIR"
     File "..\..\SysTrace_Server.exe"
@@ -146,58 +172,60 @@ Section "Hauptprogramm" SecMain
     FileWrite $0 "SERVER_PORT=$ServerPort$\r$\n"
     FileClose $0
 
-    ExecWait 'docker --version' $0
-    ${If} $0 != 0
-        MessageBox MB_OK|MB_ICONEXCLAMATION "Docker ist nicht installiert!$\nBitte Docker Desktop installieren:$\nhttps://www.docker.com/products/docker-desktop"
+    DetailPrint "Docker detected - preparing database..."
+    nsExec::ExecToLog '$DockerExe inspect systrace_postgres'
+    Pop $ContainerExists
+    ${If} $ContainerExists != 0
+        DetailPrint "New container detected - initializing volume..."
+        nsExec::ExecToLog '$DockerExe compose version'
+        Pop $1
+        ${If} $1 == 0
+            nsExec::ExecToLog '$DockerExe compose -f "$INSTDIR\db\docker-compose.yml" down -v'
+            Pop $1
+            nsExec::ExecToLog '$DockerExe compose -f "$INSTDIR\db\docker-compose.yml" up -d'
+            Pop $2
+        ${Else}
+            nsExec::ExecToLog 'docker-compose --version'
+            Pop $1
+            ${If} $1 == 0
+                nsExec::ExecToLog 'docker-compose -f "$INSTDIR\db\docker-compose.yml" down -v'
+                Pop $1
+                nsExec::ExecToLog 'docker-compose -f "$INSTDIR\db\docker-compose.yml" up -d'
+                Pop $2
+            ${Else}
+                StrCpy $2 1
+            ${EndIf}
+        ${EndIf}
     ${Else}
-        DetailPrint "Docker gefunden — Datenbank wird gestartet..."
-        DetailPrint "Docker gefunden — Datenbank wird vorbereitet..."
-        ; Prüfe ob Container bereits existiert
-        ExecWait 'docker inspect systrace_postgres' $ContainerExists
-        ${If} $ContainerExists != 0
-            ; Container existiert nicht → Volume leeren damit Init-Script läuft
-            DetailPrint "Neuer Container — Volume wird initialisiert..."
-            ExecWait 'docker compose version' $1
-            ${If} $1 == 0
-                ExecWait 'docker compose -f "$INSTDIR\db\docker-compose.yml" down -v'
-                ExecWait 'docker compose -f "$INSTDIR\db\docker-compose.yml" up -d' $2
-            ${Else}
-                ExecWait 'docker-compose --version' $1
-                ${If} $1 == 0
-                    ExecWait 'docker-compose -f "$INSTDIR\db\docker-compose.yml" down -v'
-                    ExecWait 'docker-compose -f "$INSTDIR\db\docker-compose.yml" up -d' $2
-                ${Else}
-                    StrCpy $2 1
-                ${EndIf}
-            ${EndIf}
+        DetailPrint "Existing container detected - starting services..."
+        nsExec::ExecToLog '$DockerExe compose version'
+        Pop $1
+        ${If} $1 == 0
+            nsExec::ExecToLog '$DockerExe compose -f "$INSTDIR\db\docker-compose.yml" up -d'
+            Pop $2
         ${Else}
-            ; Container existiert bereits → einfach starten
-            DetailPrint "Bestehender Container wird gestartet..."
-            ExecWait 'docker compose version' $1
+            nsExec::ExecToLog 'docker-compose --version'
+            Pop $1
             ${If} $1 == 0
-                ExecWait 'docker compose -f "$INSTDIR\db\docker-compose.yml" up -d' $2
+                nsExec::ExecToLog 'docker-compose -f "$INSTDIR\db\docker-compose.yml" up -d'
+                Pop $2
             ${Else}
-                ExecWait 'docker-compose --version' $1
-                ${If} $1 == 0
-                    ExecWait 'docker-compose -f "$INSTDIR\db\docker-compose.yml" up -d' $2
-                ${Else}
-                    StrCpy $2 1
-                ${EndIf}
+                StrCpy $2 1
             ${EndIf}
         ${EndIf}
+    ${EndIf}
 
-        ${If} $2 != 0
-            MessageBox MB_OK|MB_ICONEXCLAMATION "Datenbank konnte nicht automatisch gestartet werden.$\nBitte Docker Desktop starten und den Compose-Befehl manuell ausführen."
-        ${Else}
-            DetailPrint "Datenbank erfolgreich gestartet!"
-        ${EndIf}
+    ${If} $2 != 0
+        MessageBox MB_OK|MB_ICONEXCLAMATION "Database could not be started automatically.$\nPlease start Docker Desktop and run the compose command manually."
+    ${Else}
+        DetailPrint "Database started successfully."
     ${EndIf}
 
     WriteUninstaller "$INSTDIR\Uninstall.exe"
 
     CreateDirectory "$SMPROGRAMS\SysTrace Server"
     CreateShortcut "$SMPROGRAMS\SysTrace Server\SysTrace Server.lnk" "$INSTDIR\SysTrace_Server.exe"
-    CreateShortcut "$SMPROGRAMS\SysTrace Server\Deinstallieren.lnk" "$INSTDIR\Uninstall.exe"
+    CreateShortcut "$SMPROGRAMS\SysTrace Server\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
 
     CreateShortCut "$DESKTOP\SysTrace Server.lnk" "$INSTDIR\SysTrace_Server.exe"
 
@@ -212,13 +240,29 @@ SectionEnd
 ; ============================================
 Section "Uninstall"
 
-    ExecWait 'docker compose version' $0
+    StrCpy $DockerExe "docker"
+    nsExec::ExecToLog '$DockerExe --version'
+    Pop $0
+    ${If} $0 != 0
+        IfFileExists "$PROGRAMFILES\Docker\Docker\resources\bin\docker.exe" 0 +3
+            StrCpy $DockerExe '"$PROGRAMFILES\Docker\Docker\resources\bin\docker.exe"'
+            nsExec::ExecToLog '$DockerExe --version'
+            Pop $0
+    ${EndIf}
+
     ${If} $0 == 0
-        ExecWait 'docker compose -f "$INSTDIR\db\docker-compose.yml" down'
-    ${Else}
-        ExecWait 'docker-compose --version' $0
+        nsExec::ExecToLog '$DockerExe compose version'
+        Pop $0
         ${If} $0 == 0
-            ExecWait 'docker-compose -f "$INSTDIR\db\docker-compose.yml" down'
+            nsExec::ExecToLog '$DockerExe compose -f "$INSTDIR\db\docker-compose.yml" down'
+            Pop $0
+        ${Else}
+            nsExec::ExecToLog 'docker-compose --version'
+            Pop $0
+            ${If} $0 == 0
+                nsExec::ExecToLog 'docker-compose -f "$INSTDIR\db\docker-compose.yml" down'
+                Pop $0
+            ${EndIf}
         ${EndIf}
     ${EndIf}
 
@@ -231,7 +275,7 @@ Section "Uninstall"
 
     Delete "$DESKTOP\SysTrace Server.lnk"
     Delete "$SMPROGRAMS\SysTrace Server\SysTrace Server.lnk"
-    Delete "$SMPROGRAMS\SysTrace Server\Deinstallieren.lnk"
+    Delete "$SMPROGRAMS\SysTrace Server\Uninstall.lnk"
     RMDir "$SMPROGRAMS\SysTrace Server"
 
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\SysTrace_Server"
