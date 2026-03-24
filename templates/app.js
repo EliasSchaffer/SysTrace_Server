@@ -1,4 +1,4 @@
-// Initialisiere Leaflet-Karte
+// Initialize Leaflet map
 function initializeMap() {
     var map = L.map('map').setView([48.2, 14.1], 10);
 
@@ -22,7 +22,7 @@ function updateHealthStatus() {
             displayHealthStatus(data);
         })
         .catch(error => {
-            console.error('Fehler beim Laden des Health-Status:', error);
+            console.error('Error loading health status:', error);
         });
 }
 
@@ -63,15 +63,15 @@ function loadDevices(map) {
     fetch("/api/devices")
         .then(res => {
             if (!res.ok) {
-                throw new Error('Fehler beim Laden der Geräte');
+                throw new Error('Error loading devices');
             }
             return res.json();
         })
         .then(data => {
-            console.log('Geladene Geräte:', data);
+            console.log('Loaded devices:', data);
             data.forEach(device => {
                 if (device.lat === 0 && device.lon === 0) {
-                    console.log(`Device ${device.name} hat keine gültigen GPS-Daten`);
+                    console.log(`Device ${device.name} has no valid GPS data`);
                     return;
                 }
 
@@ -90,7 +90,7 @@ function loadDevices(map) {
             });
         })
         .catch(error => {
-            console.error('Fehler beim Laden der Geräte:', error);
+            console.error('Error loading devices:', error);
         });
 }
 
@@ -104,4 +104,3 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeMap();
     startHealthCheck();
 });
-

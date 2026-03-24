@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <title>Device Details - {{.DeviceName}}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
@@ -129,17 +129,17 @@
 </div>
 
 <div class="details-container">
-    <a href="/" class="back-button">← Zurück zur Übersicht</a>
+    <a href="/" class="back-button">← Back to Overview</a>
 
     <div class="device-info">
-        <h2>Geräteinformationen</h2>
+        <h2>Device Information</h2>
         <div class="info-grid">
             <div class="info-item">
                 <strong>Device ID</strong>
                 <span id="deviceId">{{.DeviceID}}</span>
             </div>
             <div class="info-item">
-                <strong>IP-Adresse</strong>
+                <strong>IP Address</strong>
                 <span id="ip">{{.IP}}</span>
             </div>
             <div class="info-item">
@@ -147,7 +147,7 @@
                 <span id="hostname">{{.DeviceName}}</span>
             </div>
             <div class="info-item">
-                <strong>Betriebssystem</strong>
+                <strong>Operating System</strong>
                 <span id="os">{{.OS}}</span>
             </div>
             <div class="info-item">
@@ -159,46 +159,46 @@
                 <span id="ram">{{.RAM}}</span>
             </div>
             <div class="info-item">
-                <strong>Aktuelle Position</strong>
+                <strong>Current Location</strong>
                 <span id="currentPos">{{.CurrentGPS}}</span>
             </div>
         </div>
     </div>
 
     <div class="device-info">
-        <h2>GPS-Verlauf auf Karte</h2>
+        <h2>GPS History on Map</h2>
         <div id="historyMap" class="map-container"></div>
     </div>
 
     <div class="command-panel">
-        <h2>Test-Response an diesen Client senden</h2>
+        <h2>Send Test Response to This Client</h2>
         <div class="command-row">
-            <button onclick="sendTestResponseToDeviceClient()">Test senden</button>
-            <button onclick="sendShutdownCommandToDeviceClient()">Shutdown senden</button>
-            <button onclick="sendRestartCommandToDeviceClient()">Restart senden</button>
-            <button onclick="sendHibernationCommandToDeviceClient()">Hibernation senden</button>
-            <button onclick="sendChangeServerCommandToDeviceClient()">Change Server Test senden</button>
+            <button onclick="sendTestResponseToDeviceClient()">Send Test</button>
+            <button onclick="sendShutdownCommandToDeviceClient()">Send Shutdown</button>
+            <button onclick="sendRestartCommandToDeviceClient()">Send Restart</button>
+            <button onclick="sendHibernationCommandToDeviceClient()">Send Hibernation</button>
+            <button onclick="sendChangeServerCommandToDeviceClient()">Send Change Server Test</button>
 
         </div>
         <div id="commandStatus" class="command-status"></div>
     </div>
 
     <div class="history-table">
-        <h2>GPS-Historie</h2>
+        <h2>GPS History</h2>
         <table id="historyTable">
             <thead>
                 <tr>
-                    <th>Zeitstempel</th>
+                    <th>Timestamp</th>
                     <th>Latitude</th>
                     <th>Longitude</th>
-                    <th>Höhe</th>
-                    <th>Stadt</th>
-                    <th>Land</th>
+                    <th>Altitude</th>
+                    <th>City</th>
+                    <th>Country</th>
                     <th>Region</th>
                 </tr>
             </thead>
             <tbody>
-                <!-- Wird dynamisch gefüllt -->
+                <!-- Filled dynamically -->
             </tbody>
         </table>
     </div>
@@ -216,22 +216,22 @@
         fetch(`/api/device/${deviceID}/gps-history`)
             .then(res => res.json())
             .then(data => {
-                console.log('GPS-Historie geladen:', data);
+                console.log('Loaded GPS history:', data);
 
                 if (data && data.length > 0) {
                     displayHistoryOnMap(data);
                     fillHistoryTable(data);
                 } else {
-                    console.log('Keine GPS-Historie vorhanden');
+                    console.log('No GPS history available');
                 }
             })
             .catch(error => {
-                console.error('Fehler beim Laden der GPS-Historie:', error);
+                console.error('Error while loading GPS history:', error);
             });
     }
 
     function displayHistoryOnMap(history) {
-        // Karte initialisieren
+        // Initialize map
         const firstPoint = history[0];
         const map = L.map('historyMap').setView([firstPoint.latitude, firstPoint.longitude], 13);
 
@@ -249,7 +249,7 @@
 
         map.fitBounds(polyline.getBounds());
 
-        // Marker für jeden Punkt hinzufügen
+        // Add marker for each point
         history.forEach((entry, index) => {
             const isFirst = index === 0;
             const isLast = index === history.length - 1;
@@ -262,10 +262,10 @@
                 label = 'Start';
             } else if (isLast) {
                 color = 'red';
-                label = 'Aktuell';
+                label = 'Current';
             }
 
-            // Marker erstellen
+            // Create marker
             const marker = L.circleMarker([entry.latitude, entry.longitude], {
                 radius: isFirst || isLast ? 8 : 5,
                 fillColor: color,
@@ -287,12 +287,12 @@
             marker.bindPopup(`
                 <div style="min-width: 200px;">
                     <h3>${label}</h3>
-                    <p><strong>Zeit:</strong> ${new Date(entry.timestamp).toLocaleString()}</p>
-                    <p><strong>Koordinaten:</strong><br>
+                    <p><strong>Time:</strong> ${new Date(entry.timestamp).toLocaleString()}</p>
+                    <p><strong>Coordinates:</strong><br>
                     Lat: ${entry.latitude.toFixed(6)}<br>
                     Lon: ${entry.longitude.toFixed(6)}</p>
-                    <p><strong>Ort:</strong> ${entry.city}, ${entry.region}, ${entry.country}</p>
-                    <p><strong>Höhe:</strong> ${entry.altitude ? entry.altitude + ' m' : 'N/A'}</p>
+                    <p><strong>Location:</strong> ${entry.city}, ${entry.region}, ${entry.country}</p>
+                    <p><strong>Altitude:</strong> ${entry.altitude ? entry.altitude + ' m' : 'N/A'}</p>
                 </div>
             `);
         });
@@ -335,36 +335,36 @@
             .then(async (res) => {
                 const text = await res.text();
                 if (!res.ok) {
-                    throw new Error(text || 'Senden fehlgeschlagen');
+                    throw new Error(text || 'Send failed');
                 }
                 return text;
             })
             .then(() => {
-                statusEl.textContent = `${successLabel} an ${deviceID}`;
+                statusEl.textContent = `${successLabel} to ${deviceID}`;
                 statusEl.style.color = '#1b7f2a';
             })
             .catch((err) => {
-                statusEl.textContent = `Fehler: ${err.message}`;
+                statusEl.textContent = `Error: ${err.message}`;
                 statusEl.style.color = '#b00020';
             });
     }
 
     function sendTestResponseToDeviceClient() {
-        sendResponseToDeviceClient('test','', 'Test', 'Gesendet: test/Test');
+        sendResponseToDeviceClient('test','', 'Test', 'Sent: test/Test');
     }
 
     function sendShutdownCommandToDeviceClient() {
-        sendResponseToDeviceClient('command','', 'shutdown', 'Gesendet: command/shutdown');
+        sendResponseToDeviceClient('command','', 'shutdown', 'Sent: command/shutdown');
     }
 
     function sendRestartCommandToDeviceClient() {
-        sendResponseToDeviceClient('command','', 'restart', 'Gesendet: command/restart');
+        sendResponseToDeviceClient('command','', 'restart', 'Sent: command/restart');
     }
     function sendHibernationCommandToDeviceClient() {
-        sendResponseToDeviceClient('command','', 'sleep', 'Gesendet: command/hibernate');
+        sendResponseToDeviceClient('command','', 'sleep', 'Sent: command/hibernate');
     }
     function sendChangeServerCommandToDeviceClient() {
-        sendResponseToDeviceClient('config', 'setMasterServer',`http://localhost:8080`, `Gesendet: config/change_server: http://localhost:8080`);
+        sendResponseToDeviceClient('config', 'setMasterServer',`http://localhost:8080`, `Sent: config/change_server: http://localhost:8080`);
     }
 </script>
 </body>
