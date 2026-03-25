@@ -45,6 +45,20 @@ function displayHealthStatus(devices) {
             font-weight: bold;
         `;
 
+        statusDiv.onclick = () => {
+            showDeviceDetails(device);
+        };
+
+        statusDiv.addEventListener('mouseover', () => {
+            statusDiv.style.opacity = '0.8';
+            statusDiv.style.cursor = 'pointer';
+        });
+
+        statusDiv.addEventListener('mouseout', () => {
+            statusDiv.style.opacity = '1';
+            statusDiv.style.cursor = 'default';
+        });
+
         statusDiv.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <span>${device.hostname}</span>
@@ -59,6 +73,22 @@ function displayHealthStatus(devices) {
     });
 }
 
+function getDeviceRouteKey(device) {
+    return device.name || device.hostname || device.deviceid || device.deviceId || '';
+}
+
+function hasValidMapPosition(device) {
+    if (typeof device.lat !== 'number' || typeof device.lon !== 'number') {
+        return false;
+    }
+
+    if ((device.lat === 0 && device.lon === 0) || (device.lat === -1 && device.lon === -1)) {
+        return false;
+    }
+
+    return true;
+}
+
 function loadDevices(map) {
     fetch("/api/devices")
         .then(res => {
@@ -70,13 +100,14 @@ function loadDevices(map) {
         .then(data => {
             console.log('Loaded devices:', data);
             data.forEach(device => {
-                if (device.lat === 0 && device.lon === 0) {
-                    console.log(`Device ${device.name} has no valid GPS data`);
+                const routeKey = getDeviceRouteKey(device);
+                if (!hasValidMapPosition(device)) {
+                    console.log(`Device ${routeKey} has no valid GPS data`);
                     return;
                 }
 
                 let marker = L.marker([device.lat, device.lon]);
-                marker.bindTooltip(`${device.name}<br>${device.ip}`, {
+                marker.bindTooltip(`${routeKey}<br>${device.ip}`, {
                     permanent: false,
                     direction: 'top',
                     offset: [0, -10]
@@ -95,9 +126,14 @@ function loadDevices(map) {
 }
 
 function showDeviceDetails(device) {
-    console.log('Device clicked:', device.name);
+    const routeKey = getDeviceRouteKey(device);
+    if (!routeKey) {
+        console.warn('Device has no route key:', device);
+        return;
+    }
 
-    window.location.href = `/device/${encodeURIComponent(device.name)}`;
+    console.log('Device clicked:', routeKey);
+    window.location.href = `/device/${encodeURIComponent(routeKey)}`;
 }
 
 document.addEventListener('DOMContentLoaded', function() {

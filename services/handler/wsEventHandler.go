@@ -10,6 +10,10 @@ import (
 type WSEventHandler struct {
 }
 
+func isNoGPSUpdate(gps static.GPS) bool {
+	return gps.Latitude == -1 && gps.Longitude == -1
+}
+
 func (h *Handler) HandleEvent(eventString string) {
 	raw := []byte(eventString)
 
@@ -48,6 +52,11 @@ func (h *Handler) HandleEvent(eventString string) {
 
 func (h *Handler) handleUpdateEvent(device static.Device) {
 	device.Active = true
+
+	if isNoGPSUpdate(device.GPS) {
+		// Clear GPS for this update so map/device endpoints treat it as "no location".
+		device.GPS = static.GPS{}
+	}
 
 	h.mu.Lock()
 	h.devices[device.ID] = &device

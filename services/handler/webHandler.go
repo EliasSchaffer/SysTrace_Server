@@ -210,6 +210,10 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if isNoGPSUpdate(m.GPS) {
+		m.GPS = static.GPS{}
+	}
+
 	h.mu.Lock()
 	m.Active = true
 	h.devices[m.ID] = &m
@@ -238,6 +242,13 @@ func (h *Handler) Devices(w http.ResponseWriter, _ *http.Request) {
 	gpsDataArray := make([]map[string]interface{}, 0)
 
 	for _, device := range h.devices {
+		if device.GPS.Latitude == 0 && device.GPS.Longitude == 0 {
+			continue
+		}
+		if isNoGPSUpdate(device.GPS) {
+			continue
+		}
+
 		gpsData := map[string]interface{}{
 			"lat":  device.GPS.Latitude,
 			"lon":  device.GPS.Longitude,
